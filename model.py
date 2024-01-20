@@ -38,15 +38,20 @@ class GCPNet(nn.Module):
         self.LSTM_v = LSTM(input_size=embedding_size, hidden_size=embedding_size)
         self.LSTM_c = LSTM(input_size=embedding_size, hidden_size=embedding_size)
         self.V_vote_mlp = MLP(in_channels=embedding_size, hidden_channels=embedding_size, out_channels=1, num_layers=3)
+        self.V_h = (torch.rand((1, 64)), torch.rand((1, 64)))
+        self.C_h = (torch.rand((1, 64)), torch.rand((1, 64)))
 
     def forward(self, M_vv, M_vc, V, C, slice_idx):
         # run for tmax times the message passing process
+        self.V_h = (torch.rand((1, 64)), torch.zeros((1, 64)))
+        self.C_h = (torch.rand((1, 64)), torch.zeros((1, 64)))
         for i in range(self.tmax):
             # Calculate the new Vertex embedding.
-            v_h, _ = self.LSTM_v(torch.concat((torch.matmul(M_vv, V), torch.matmul(M_vc, self.mlpC(C)))))
+            V_, self.V_h = self.LSTM_v(torch.concat((torch.matmul(M_vv, V), torch.matmul(M_vc, self.mlpC(C)))), self.V_h)
             # Calculate the new Color embedding.
-            C, _ = self.LSTM_c(torch.matmul(M_vc.T, self.mlpV(V)))
-            V = v_h[:V.shape[0], :]
+            C, self.C_h = self.LSTM_c(torch.matmul(M_vc.T, self.mlpV(V)), self.C_h)
+            V = V_[:V.shape[0], :]
+            C = C[:C.shape[0], :]
         # Calculate the logit probability for each vertex.
         v_vote = self.V_vote_mlp(V)
         v_vote = v_vote.split(slice_idx)
