@@ -32,8 +32,8 @@ class GraphDataSet(Dataset):
         return ConvertToTensor.get_batch(jsons)
 
     def __getitem__(self, idx):
-        gc, labels, cn, split = self.transform(self.idx_mapping[idx])
-        return gc, labels, cn, split
+        gc, labels, cn, split, mvc = self.transform(self.idx_mapping[idx])
+        return gc, labels, cn, split, mvc
 
 
 if __name__ == '__main__':

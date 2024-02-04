@@ -32,7 +32,9 @@ class ConvertToTensor(object):
         loaded = [json.load(open(j)) for j in jsons]
         size = sum([l['v'] for l in loaded])*2
         ret_mat = torch.zeros((int(size), int(size)))
+        mvc = torch.zeros((int(size), 2*int(sum([l['c_number'] for l in loaded]))))
         shift = 0
+        color_shift = 0
         ret_labels = []
         color_nm = []
         split = []
@@ -45,11 +47,14 @@ class ConvertToTensor(object):
             m = mat.shape[0]
             ret_mat[shift:shift+m, shift:shift+m] = mat
             ret_mat[shift+m:shift+(2*m), shift+m:shift+(2*m)] = mat_adv
+            mvc[shift:shift+m, color_shift:color_shift+l['c_number']] = 1
+            mvc[shift+m:shift+(2*m), color_shift+l['c_number']:color_shift+(2*l['c_number'])] = 1
+            color_shift += l['c_number']
             ret_labels += [1, 0]
             color_nm += [l['c_number'], l['c_number']]
             shift += 2*m
             split += [m, m]
-        return ret_mat, ret_labels, color_nm, split
+        return ret_mat, ret_labels, color_nm, split, mvc
 
     def random_graph(self):
         return self.get_one(random.choice(self._gp))
