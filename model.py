@@ -30,7 +30,7 @@ The final output of the net would be sigmoid(V_logits <-- V_vote(V))
 
 
 class GCPNet(nn.Module):
-    def __init__(self, embedding_size, tmax=32):
+    def __init__(self, embedding_size, tmax=32, device='cuda'):
         super(GCPNet, self).__init__()
         self.tmax = tmax
         self.mlpC = MLP(in_channels=embedding_size, hidden_channels=embedding_size, out_channels=embedding_size, num_layers=3)
@@ -38,8 +38,20 @@ class GCPNet(nn.Module):
         self.LSTM_v = LSTM(input_size=embedding_size*2, hidden_size=embedding_size)
         self.LSTM_c = LSTM(input_size=embedding_size, hidden_size=embedding_size)
         self.V_vote_mlp = MLP(in_channels=embedding_size, hidden_channels=embedding_size, out_channels=1, num_layers=3)
-        self.V_h = (torch.rand((1, 64)), torch.rand((1, 64)))
-        self.C_h = (torch.rand((1, 64)), torch.rand((1, 64)))
+        self.V_h = (torch.rand((1, 64)).to(device=device), torch.rand((1, 64)).to(device=device))
+        self.C_h = (torch.rand((1, 64)).to(device=device), torch.rand((1, 64)).to(device=device))
+
+    def get_vh(self):
+        return self.V_h
+
+    def set_vh(self, vh):
+        self.V_h = (vh[0].detach(), vh[1].detach())
+
+    def get_ch(self):
+        return self.C_h
+
+    def set_ch(self, ch):
+        self.C_h = (ch[0].detach(), ch[1].detach())
 
     def forward(self, M_vv, M_vc, V, C, slice_idx):
         # run for tmax times the message passing process

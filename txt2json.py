@@ -7,7 +7,9 @@ import os
 
 
 def from_text_to_JSON(path):
-    for g in glob.glob('{}/*.graph'.format(path)):
+    files = glob.glob('{}/*.graph'.format(path))
+    for i, g in enumerate(files):
+        print('/rworking On {} from {}'.format(i, len(files)))
         text_graph = open(g).readlines()
         start = False
         diff_flag = False
