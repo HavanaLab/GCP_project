@@ -8,9 +8,10 @@ from torch.utils.data import Dataset
 
 
 class GraphDataSet(Dataset):
-    def __init__(self, graph_dir, batch_size):
+    def __init__(self, graph_dir, batch_size, get_true=False):
         self.bs = batch_size
         self.gd = graph_dir
+        self.get_true = get_true
         self.jsons = glob.glob('{}/*.json'.format(self.gd))
         self.idx_mapping = self.get_idx_mapping()
 
@@ -29,7 +30,7 @@ class GraphDataSet(Dataset):
 
     def transform(self, idx):
         jsons = [self.jsons[i] for i in idx]
-        return ConvertToTensor.get_batch(jsons)
+        return ConvertToTensor.get_batch(jsons)#, get_true=self.get_true)
 
     def __getitem__(self, idx):
         gc, labels, cn, split, mvc = self.transform(self.idx_mapping[idx])

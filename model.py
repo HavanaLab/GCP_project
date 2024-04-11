@@ -30,42 +30,36 @@ The final output of the net would be sigmoid(V_logits <-- V_vote(V))
 
 
 class GCPNet(nn.Module):
-    def __init__(self, embedding_size, tmax=32, device='cuda'):
+    def __init__(self, embedding_size, tmax=32, device='cpu'):
         super(GCPNet, self).__init__()
         self.tmax = tmax
+        self.device = device
+        self.one_tensor = torch.ones(1).to(device)
+        self.one_tensor.requires_grad = False
+        self.v_emb = nn.Linear(1, embedding_size)
         self.mlpC = MLP(in_channels=embedding_size, hidden_channels=embedding_size, out_channels=embedding_size, num_layers=3)
         self.mlpV = MLP(in_channels=embedding_size, hidden_channels=embedding_size, out_channels=embedding_size, num_layers=3)
         self.LSTM_v = LSTM(input_size=embedding_size*2, hidden_size=embedding_size)
         self.LSTM_c = LSTM(input_size=embedding_size, hidden_size=embedding_size)
         self.V_vote_mlp = MLP(in_channels=embedding_size, hidden_channels=embedding_size, out_channels=1, num_layers=3)
-        self.V_h = (torch.rand((1, 64)).to(device=device), torch.rand((1, 64)).to(device=device))
-        self.C_h = (torch.rand((1, 64)).to(device=device), torch.rand((1, 64)).to(device=device))
 
-    def get_vh(self):
-        return self.V_h
-
-    def set_vh(self, vh):
-        self.V_h = (vh[0].detach(), vh[1].detach())
-
-    def get_ch(self):
-        return self.C_h
-
-    def set_ch(self, ch):
-        self.C_h = (ch[0].detach(), ch[1].detach())
-
-    def forward(self, M_vv, M_vc, V, C, slice_idx):
+    def forward(self, M_vv, M_vc, C, slice_idx):
         # run for tmax times the message passing process
-        self.V_h = (self.V_h[0].detach(), self.V_h[1].detach())
-        self.C_h = (self.C_h[0].detach(), self.C_h[1].detach())
+        V = self.v_emb(self.one_tensor)
+        V = V.repeat(1, M_vv.shape[0], 1)
+        V_h = (V, torch.zeros(V.shape).to(self.device))
+        C_h = (C.unsqueeze(0), torch.zeros(C.unsqueeze(0).shape).to(self.device))
+        # V = V.squeeze()
+
         for i in range(self.tmax):
-            V_ = V.clone()
+            V_ = V.clone().squeeze()
             # Calculate the new Vertex embedding.
-            V, self.V_h = self.LSTM_v(torch.cat([torch.matmul(M_vv, V), torch.matmul(M_vc, self.mlpC(C))], dim=1), self.V_h)
+            _, V_h = self.LSTM_v(torch.cat([torch.matmul(M_vv, V), torch.matmul(M_vc, self.mlpC(C).unsqueeze(0))], dim=2), V_h)
             # Calculate the new Color embedding.
-            C, self.C_h = self.LSTM_c(torch.matmul(M_vc.T, self.mlpV(V_)), self.C_h)
+            _, C_h = self.LSTM_c(torch.matmul(M_vc.T, self.mlpV(V_).unsqueeze(0)), C_h)
 
         # Calculate the logit probability for each vertex.
-        v_vote = self.V_vote_mlp(V)
+        v_vote = self.V_vote_mlp(V_h[0].squeeze())
         v_vote = v_vote.split(slice_idx)
         ret = [torch.sigmoid(v.mean()) for v in v_vote]
-        return torch.vstack(ret).squeeze()
+        return torch.vstack(ret).squeeze(), V, C
