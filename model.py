@@ -42,24 +42,26 @@ class GCPNet(nn.Module):
         self.LSTM_v = LSTM(input_size=embedding_size*2, hidden_size=embedding_size)
         self.LSTM_c = LSTM(input_size=embedding_size, hidden_size=embedding_size)
         self.V_vote_mlp = MLP(in_channels=embedding_size, hidden_channels=embedding_size, out_channels=1, num_layers=3)
+        self.V_h = (torch.rand((1, embedding_size)).to(device), torch.zeros((1, embedding_size)).to(device))
+        self.C_h = (torch.rand((1, embedding_size)).to(device), torch.zeros((1, embedding_size)).to(device))
 
-    def forward(self, M_vv, M_vc, C, slice_idx):
+    def forward(self, M_vv, M_vc, V, C, slice_idx):
         # run for tmax times the message passing process
-        V = self.v_emb(self.one_tensor)
-        V = V.repeat(1, M_vv.shape[0], 1)
-        V_h = (V, torch.zeros(V.shape).to(self.device))
-        C_h = (C.unsqueeze(0), torch.zeros(C.unsqueeze(0).shape).to(self.device))
+        # V = self.v_emb(self.one_tensor)
+        self.V_h = (self.V_h[0].detach(), torch.zeros(self.V_h[1].shape).to(self.device))
+        self.C_h = (self.C_h[0].detach(), torch.zeros(self.C_h[1].shape).to(self.device))
+        # V = V.repeat(1, M_vv.shape[0], 1)
         # V = V.squeeze()
 
         for i in range(self.tmax):
             V_ = V.clone().squeeze()
             # Calculate the new Vertex embedding.
-            _, V_h = self.LSTM_v(torch.cat([torch.matmul(M_vv, V), torch.matmul(M_vc, self.mlpC(C).unsqueeze(0))], dim=2), V_h)
+            V, self.V_h = self.LSTM_v(torch.cat([torch.matmul(M_vv, V), torch.matmul(M_vc, self.mlpC(C))], dim=1), self.V_h)
             # Calculate the new Color embedding.
-            _, C_h = self.LSTM_c(torch.matmul(M_vc.T, self.mlpV(V_).unsqueeze(0)), C_h)
+            C, self.C_h = self.LSTM_c(torch.matmul(M_vc.T, self.mlpV(V_)), self.C_h)
 
         # Calculate the logit probability for each vertex.
-        v_vote = self.V_vote_mlp(V_h[0].squeeze())
+        v_vote = self.V_vote_mlp(V.squeeze())
         v_vote = v_vote.split(slice_idx)
         ret = [torch.sigmoid(v.mean()) for v in v_vote]
         return torch.vstack(ret).squeeze(), V, C
