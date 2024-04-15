@@ -60,7 +60,7 @@ if __name__ == '__main__':
     epoc_loss = []
     epoc_acc = []
     epoch_size = 128
-
+    c_rand = torch.rand(1, embedding_size)
     v_normal = torch.normal(mean=0., std=1., size=(1, embedding_size))/8.
     for i in range(args.epochs):
         t1 = time.perf_counter()
