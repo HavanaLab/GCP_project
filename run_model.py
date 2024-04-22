@@ -21,7 +21,7 @@ CHECK_POINT_PATH = '/content/drive/MyDrive/project_MSC/checkpoints/'
 DATA_SET_PATH = '/content/pickles/pickles/'  # '/content/drive/MyDrive/project_MSC/train_jsons'  #
 DEVICE =  'cpu'  # 'cuda'  #
 
-def save_model(epoc, model, acc, loss, opt, test_acc):
+def save_model(epoc, model, v, acc, loss, opt, test_acc):
     dt = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
     torch.save(
         {
@@ -30,7 +30,10 @@ def save_model(epoc, model, acc, loss, opt, test_acc):
             'acc': acc,
             'loss': loss,
             'optimizer_state_dict': opt.state_dict(),
-            'test_acc': test_acc
+            'test_acc': test_acc,
+            'V_h': model.get_vh(),
+            'C_h': model.get_ch(),
+            'v': v
         },
         '{}/checkpoint_no_V_{}_{}.pt'.format(CHECK_POINT_PATH, dt, epoc)
     )
@@ -108,5 +111,5 @@ if __name__ == '__main__':
         epoc_loss.append(plot_loss)
         if (i % EPOC_STEP) == 0:
             print('Saving model')
-            save_model(i, gcp, epoc_acc, epoc_loss, opt)
+            save_model(i, gcp, V, epoc_acc, epoc_loss, opt)
         print('Accuracy: {}\tLoss: {}'.format(plot_acc, plot_loss))

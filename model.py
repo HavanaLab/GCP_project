@@ -36,7 +36,7 @@ class GCPNet(nn.Module):
         self.device = device
         self.one_tensor = torch.ones(1).to(device)
         self.one_tensor.requires_grad = False
-        self.v_emb = nn.Linear(1, embedding_size)
+        # self.v_emb = nn.Linear(1, embedding_size) # TODO: try w/ and w/o
         self.mlpC = MLP(in_channels=embedding_size, hidden_channels=embedding_size, out_channels=embedding_size, num_layers=3)
         self.mlpV = MLP(in_channels=embedding_size, hidden_channels=embedding_size, out_channels=embedding_size, num_layers=3)
         self.LSTM_v = LSTM(input_size=embedding_size*2, hidden_size=embedding_size)
@@ -44,6 +44,18 @@ class GCPNet(nn.Module):
         self.V_vote_mlp = MLP(in_channels=embedding_size, hidden_channels=embedding_size, out_channels=1, num_layers=3)
         self.V_h = (torch.rand((1, embedding_size)).to(device), torch.zeros((1, embedding_size)).to(device))
         self.C_h = (torch.rand((1, embedding_size)).to(device), torch.zeros((1, embedding_size)).to(device))
+
+    def get_vh(self):
+        return (self.V_h[0].detach(), self.V_h[1].detach())
+
+    def set_vh(self, V_h):
+        self.V_h = V_h
+
+    def get_ch(self):
+        return (self.C_h[0].detach(), self.C_h[1].detach())
+
+    def set_ch(self, C_h):
+        self.C_h = C_h
 
     def forward(self, M_vv, M_vc, V, C, slice_idx):
         # run for tmax times the message passing process
