@@ -1,0 +1,8 @@
+numpy
+ortools
+torch
+boto3
+matplotlib
+torch_geometric
+networkx
+grinpy

@@ -1,0 +1,92 @@
+# ---> Python
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*,cover
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+venv_new/
+venv/
+lvenv/
+lvenv
+wandb/
+src/wandb/
+src/wandb/
+.idea/
+tmp/
+src/thundersvm/
+src/PyMiniSolvers
+src/PyMiniSolvers/
+src/PyMiniSolvers/*
+.git_old/
+output.logs/
+
+
+
+*-phd-b1134243ba8f.json
+*-phd-a3cfce0cf562.json
+*-phd-369813-c7161014151b.json
+*-phd-369813-197831aa6f20.json
+
+plots for paper2/
+plots for paper/
+outputs/
+src/Cora/
+tmp/
+src/tmp/
+src/nsnet_proj/
+src/data/*
+*.env

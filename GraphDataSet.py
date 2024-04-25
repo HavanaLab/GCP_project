@@ -1,6 +1,7 @@
 import glob
 import random
 
+import torch
 from torch.utils.data import DataLoader
 
 from parse_graphs import ConvertToTensor
@@ -8,10 +9,16 @@ from torch.utils.data import Dataset
 
 
 class GraphDataSet(Dataset):
-    def __init__(self, graph_dir, batch_size, get_true=False):
+    def __init__(self, graph_dir, batch_size):
         self.bs = batch_size
         self.gd = graph_dir
-        self.get_true = get_true
+
+        self.files_list = []
+        indexes = torch.randperm(len(self.files_list))
+        self.files_list = [self.files_list[i] for i in indexes]
+        self.current_file = 0
+        self.current_instance = 0
+
         self.jsons = glob.glob('{}/*.json'.format(self.gd))
         self.idx_mapping = self.get_idx_mapping()
 
@@ -30,7 +37,7 @@ class GraphDataSet(Dataset):
 
     def transform(self, idx):
         jsons = [self.jsons[i] for i in idx]
-        return ConvertToTensor.get_batch(jsons)#, get_true=self.get_true)
+        return ConvertToTensor.get_batch(jsons)
 
     def __getitem__(self, idx):
         gc, labels, cn, split, mvc = self.transform(self.idx_mapping[idx])
