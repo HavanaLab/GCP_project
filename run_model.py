@@ -47,6 +47,8 @@ if __name__ == '__main__':
     parser.add_argument('--tmax', type=int, default=32)
     parser.add_argument('--epocs', type=int, default=3500)
     parser.add_argument('--device', default='cuda')
+    parser.add_argument('--check_path')
+    parser.add_argument('--test', type=bool, default=False)
     args = parser.parse_args()
 
     embedding_size = args.embedding_size
@@ -57,6 +59,13 @@ if __name__ == '__main__':
 
     opt = torch.optim.Adam(gcp.parameters(), lr=2e-5, weight_decay=1e-10)
     loss = torch.nn.BCELoss()
+
+    # load checkpoint
+    checkpoint = torch.load(args.check_path)
+    gcp.load_state_dict(checkpoint['model'])
+    opt.load_state_dict(checkpoint['optimizer_state_dict'])
+    gcp.set_ch(checkpoint['C_h'])
+    gcp.set_vh(checkpoint['V_h'])
 
     plot_loss = 0
     plot_acc = 0
@@ -100,8 +109,9 @@ if __name__ == '__main__':
             l = loss(pred, torch.Tensor(labels).to(device=DEVICE))
             plot_loss += l.detach()
             plot_acc += sum((pred.detach().cpu() > 0.5) == torch.Tensor(labels))/float(len(cn))
-            l.backward()
-            opt.step()
+            if not args.test:
+                l.backward()
+                opt.step()
         t2 = time.perf_counter()
         print('Time: t2-t1={}'.format(t2-t1))
         print(v_normal)
