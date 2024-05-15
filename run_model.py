@@ -15,12 +15,15 @@ from model import GCPNet
 
 
 EPOC_STEP = 50
-CHECK_POINT_PATH = './checkpoints/first_test2'
+# CHECK_POINT_PATH = './checkpoints/second_fix'
+CHECK_POINT_PATH = './checkpoints/first_fix'
 DATA_SET_PATH = '/content/pickles/pickles/'  # '/content/drive/MyDrive/project_MSC/train_jsons'  #
 DEVICE =  'cpu'  # 'cuda'  #
 
-def save_model(epoc, model, acc, loss, opt, test_acc):
+def save_model(epoc, model, acc, loss, opt, test_acc, best):
+    best = max(best, test_acc)
     dt = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
+    os.makedirs(CHECK_POINT_PATH, exist_ok=True)
     torch.save(
         {
             'epoc': epoc,
@@ -29,10 +32,11 @@ def save_model(epoc, model, acc, loss, opt, test_acc):
             'loss': loss[-1],
             'optimizer_state_dict': opt.state_dict(),
             'test_acc': test_acc,
-            "best": max(acc)
+            "best": best,
         },
         '{}/checkpoint_no_V_{}_{}.pt'.format(CHECK_POINT_PATH, dt, epoc)
     )
+    return best
 
 
 if __name__ == '__main__':
@@ -66,16 +70,16 @@ if __name__ == '__main__':
     epoch_size = 128
     accumulated_size = 0
     start_epoc = 0
+    best = -1
     # load checkpoint
     if args.check_path is not None:
         checkpoint = torch.load(args.check_path)
         gcp.load_state_dict(checkpoint['model'])
         opt.load_state_dict(checkpoint['optimizer_state_dict'])
-        epoc_acc = []
         if "best" in checkpoint:
-            epoc_acc.append(checkpoint["best"])
-        if hasattr(epoc_acc, '__iter__'): epoc_acc += checkpoint['acc']
-        else: epoc_acc.append(checkpoint['acc'])
+            best = checkpoint["best"]
+
+        epoc_acc = checkpoint['acc'] if hasattr(epoc_acc, '__iter__') else epoc_acc.append(checkpoint['acc'])
 
         start_epoch_string = args.check_path.split("/")[-1].split("_")[-1].split(".")[0]
         if "epoc" in checkpoint:
@@ -151,7 +155,7 @@ if __name__ == '__main__':
             test_acc /= j
         else:
             test_acc = -1
-        if (i % EPOC_STEP) == 0 and not args.test:
+        if best < test_acc or (i % EPOC_STEP) == 0 and not args.test:
             print('Saving model')
-            save_model(i, gcp, epoc_acc, epoc_loss, opt, test_acc)
-        print('Accuracy: {}\tLoss: {}\t Test: {}'.format(plot_acc, plot_loss, test_acc))
+            best = save_model(i, gcp, epoc_acc, epoc_loss, opt, test_acc, best)
+        print('Accuracy: {}\tLoss: {}\t Test: {}\t Max: {}'.format(plot_acc, plot_loss, test_acc, best))
