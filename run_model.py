@@ -21,11 +21,12 @@ DATA_SET_PATH = '/content/pickles/pickles/'  # '/content/drive/MyDrive/project_M
 DEVICE =  'cpu'  # 'cuda'  #
 
 def save_model(epoc, model, acc, loss, opt, test_acc, best):
+    new_best = best<test_acc
+
     best = max(best, test_acc)
     dt = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
     os.makedirs(CHECK_POINT_PATH, exist_ok=True)
-    torch.save(
-        {
+    save_obj = {
             'epoc': epoc,
             'model': model.state_dict(),
             'acc': acc[-1],
@@ -33,9 +34,9 @@ def save_model(epoc, model, acc, loss, opt, test_acc, best):
             'optimizer_state_dict': opt.state_dict(),
             'test_acc': test_acc,
             "best": best,
-        },
-        '{}/checkpoint_no_V_{}_{}.pt'.format(CHECK_POINT_PATH, dt, epoc)
-    )
+        }
+    torch.save(save_obj, '{}/checkpoint_no_V_{}_{}.pt'.format(CHECK_POINT_PATH, dt, epoc))
+    if new_best: torch.save(save_obj, '{}/best.pt'.format(CHECK_POINT_PATH))
     return best
 
 
