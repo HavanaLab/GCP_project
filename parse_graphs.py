@@ -1,4 +1,3 @@
-
 __auther__ = 'dovkess@gmail.com'
 
 import glob
@@ -28,40 +27,73 @@ class ConvertToTensor(object):
         mat_adv[cc[1], cc[0]] = 1
         return mat, mat_adv, jg['c_number']
 
+    BATCH_CACHE = {}
     @staticmethod
     def get_batch(jsons, device='cpu'):
         # load batch of graphs
-        loaded = []
+        V_matricies = []
+        C_matricies = []
+        breaking_edges = []
+        splits = []
+        colors = []
+
         for j in jsons:
-            f = open(j, 'r')
-            loaded.append(json.load(f))
-            f.close()
-        # loaded = [json.load(open(j)) for j in jsons]
-        size = sum([l['v'] for l in loaded])*2
-        ret_mat = torch.zeros((int(size), int(size)))
-        mvc = torch.zeros((int(size), 2*int(sum([l['c_number'] for l in loaded]))))
-        shift = 0
-        color_shift = 0
-        ret_labels = []
-        color_nm = []
-        split = []
-        for l in loaded:
-            mat = torch.Tensor(l['m']).reshape([l['v'], l['v']])
-            mat_adv = mat.clone()
-            cc = l['change_coord']
-            mat_adv[cc[0], cc[1]] = 1
-            mat_adv[cc[1], cc[0]] = 1
-            m = mat.shape[0]
-            ret_mat[shift:shift+m, shift:shift+m] = mat
-            ret_mat[shift+m:shift+(2*m), shift+m:shift+(2*m)] = mat_adv
-            mvc[shift:shift+m, color_shift:color_shift+l['c_number']] = 1
-            mvc[shift+m:shift+(2*m), color_shift+l['c_number']:color_shift+(2*l['c_number'])] = 1
-            color_shift += 2*l['c_number']
-            ret_labels += [1, 0]
-            color_nm += [l['c_number'], l['c_number']]
-            shift += 2*m
-            split += [m, m]
-        return torch.Tensor(ret_mat).to(device), torch.Tensor(ret_labels).to(device), torch.Tensor(color_nm).to(device), torch.Tensor(split).to(device), torch.Tensor(mvc).to(device)
+            if j not in ConvertToTensor.BATCH_CACHE:
+                with open(j, 'r') as f:
+                    l = json.load(f)
+                n = l['v']
+                v_mat = torch.Tensor(l['m']).reshape([n,n])
+                c = l['c_number']
+                be = l['change_coord']
+                split = v_mat.shape[0]
+                c_mat = torch.ones(n,c)
+                ConvertToTensor.BATCH_CACHE[j] = (v_mat, c_mat, be, c, split)
+
+            v_mat, c_mat, b_edges, c, s = ConvertToTensor.BATCH_CACHE[j]
+            V_matricies.append(v_mat)
+            C_matricies.append(c_mat)
+            breaking_edges.append(b_edges)
+            colors.append(c)
+            splits.append(s)
+
+        labels = torch.randint(0, 2, size=(len(V_matricies),)).float()
+        for i in range(len(V_matricies)):
+            if labels[i] == 0:
+                v, u = breaking_edges[i]
+                V_matricies[i][v][u] = V_matricies[i][u][v] = 1
+
+        # v_mat_temp =[]
+        # c_mat_temp = []
+        # breaking_edges_temp = []
+        # colors_temp = []
+        # splits_temp = []
+        # labels_temp = []
+        # for i in range(len(V_matricies)):
+        #     for j in range(2):
+        #         v_mat_temp.append(V_matricies[i].clone())
+        #         c_mat_temp.append(C_matricies[i].clone())
+        #         u,v = breaking_edges[i]
+        #         v_mat_temp[-1][u,v] = v_mat_temp[-1][v, u] = 1
+        #         breaking_edges_temp.append(breaking_edges[i])
+        #         colors_temp.append(colors[i])
+        #         splits_temp.append(splits[i])
+        #         labels_temp.append(1-j)
+        # V_matricies = v_mat_temp
+        # C_matricies = c_mat_temp
+        # breaking_edges = breaking_edges_temp
+        # colors = colors_temp
+        # splits = splits_temp
+        # labels = torch.tensor(labels_temp).float()
+
+        V_matricies_rotated = []
+        for i in range(len(V_matricies)):
+            perm = torch.randperm(V_matricies[i].shape[0])
+            V_matricies_rotated.append(V_matricies[i][perm][:, perm])
+
+        V_mat = torch.block_diag(*V_matricies_rotated)
+        C_mat = torch.block_diag(*C_matricies)
+
+        return V_mat.to(device), labels.to(device), torch.tensor(colors).to(device), torch.Tensor(splits).to(device), C_mat.to(device)
 
     def random_graph(self):
         return self.get_one(random.choice(self._gp))

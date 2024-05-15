@@ -23,6 +23,7 @@ class GraphDataSet(Dataset):
         idx_mapping = []
         while idxs:
             tmp_idx = random.sample(idxs, k=min(self.bs, len(idxs)))
+            # tmp_idx = idxs[:min(self.bs, len(idxs))]
             for r in tmp_idx:
                 idxs.remove(r)
             idx_mapping.append(tmp_idx)
