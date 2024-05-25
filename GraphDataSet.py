@@ -8,11 +8,13 @@ from torch.utils.data import Dataset
 
 
 class GraphDataSet(Dataset):
-    def __init__(self, graph_dir, batch_size, get_true=False):
+    def __init__(self, graph_dir, batch_size, get_true=False, limit=None):
         self.bs = batch_size
         self.gd = graph_dir
         self.get_true = get_true
         self.jsons = glob.glob('{}/*.json'.format(self.gd))
+        limit = limit or len(self.jsons)
+        self.jsons = self.jsons[:limit]
         self.idx_mapping = self.get_idx_mapping()
 
     def __len__(self):

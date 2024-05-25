@@ -37,6 +37,15 @@ class ConvertToTensor(object):
         splits = []
         colors = []
 
+        # jsons= [jsons[0]]*len(jsons)
+        # jsons= ["/home/elad/Documents/kcol/tmp/json/train/m13991.graph.json"]*len(jsons)
+
+        jsons2 = []
+        for j in jsons:
+            jsons2.append(j)
+            jsons2.append(j)
+        jsons = jsons2
+
         for j in jsons:
             if j not in ConvertToTensor.BATCH_CACHE:
                 with open(j, 'r') as f:
@@ -57,6 +66,11 @@ class ConvertToTensor(object):
             splits.append(s)
 
         labels = torch.randint(0, 2, size=(len(V_matricies),)).float()
+        labels = torch.tensor([1.0,0.0]*(len(jsons)//2))
+        # labels = torch.zeros(len(V_matricies))
+        # labels[:len(V_matricies)//2] = 1
+
+        labels = torch.zeros(len(V_matricies))
         for i in range(len(V_matricies)):
             if labels[i] == 0:
                 v, u = breaking_edges[i]
@@ -90,7 +104,8 @@ class ConvertToTensor(object):
             perm = torch.randperm(V_matricies[i].shape[0])
             V_matricies_rotated.append(V_matricies[i][perm][:, perm])
 
-        V_mat = torch.block_diag(*V_matricies_rotated)
+        # V_mat = torch.block_diag(*V_matricies_rotated)
+        V_mat = torch.block_diag(*V_matricies)
         C_mat = torch.block_diag(*C_matricies)
 
         return V_mat.to(device), labels.to(device), torch.tensor(colors).to(device), torch.Tensor(splits).to(device), C_mat.to(device)
