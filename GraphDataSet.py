@@ -17,6 +17,9 @@ class GraphDataSet(Dataset):
         self.jsons = self.jsons[:limit]
         self.idx_mapping = self.get_idx_mapping()
 
+    def shuffle(self):
+        self.idx_mapping = self.get_idx_mapping()
+
     def __len__(self):
         return len(self.idx_mapping)
 

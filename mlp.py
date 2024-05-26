@@ -24,10 +24,5 @@ class MLP(nn.Module):
         x = self.l3(x)
         if self.with_act: x = torch.relu(x)
         x = self.l4(x)
-
-        # if self.bias is not None:
-        #     my_ans = (original_x * self.weights).sum(1) + self.bias
-        #     if (my_ans != x).any(): print("different answer")
-
         return x
 

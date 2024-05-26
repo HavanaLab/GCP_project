@@ -7,6 +7,8 @@ import random
 import torch
 import numpy as np
 
+import networkx as nx
+from networkx.algorithms import bipartite
 
 class ConvertToTensor(object):
     '''
@@ -15,17 +17,6 @@ class ConvertToTensor(object):
     def __init__(self, graph_dir_path, device='cuda'):
         self._gp = glob.glob('{}/*.json'.format(graph_dir_path))
         self.device = device
-
-    @staticmethod
-    def get_one(g):
-        # load graph
-        jg = json.load(open(g))
-        mat = torch.Tensor(jg['m']).reshape([jg['v'], jg['v']])
-        mat_adv = mat.clone()
-        cc = jg['change_coord']
-        mat_adv[cc[0], cc[1]] = 1
-        mat_adv[cc[1], cc[0]] = 1
-        return mat, mat_adv, jg['c_number']
 
     BATCH_CACHE = {}
     @staticmethod
@@ -56,6 +47,13 @@ class ConvertToTensor(object):
                 be = l['change_coord']
                 split = v_mat.shape[0]
                 c_mat = torch.ones(n,c)
+
+                # G = bipartite.random_graph(n//2, n-n//2, 0.5)
+                # c=2
+                # v_mat2 = torch.Tensor((nx.to_numpy_array(G)*1.0).tolist())
+                # # be = torch.randint(n//2, n, (2,)) if torch.randint(0, 2, (1,)) > 0.5 else torch.randint(0, n//2, (2,))
+                # c_mat = torch.ones(n, c)
+
                 ConvertToTensor.BATCH_CACHE[j] = (v_mat, c_mat, be, c, split)
 
             v_mat, c_mat, b_edges, c, s = ConvertToTensor.BATCH_CACHE[j]
@@ -70,7 +68,6 @@ class ConvertToTensor(object):
         # labels = torch.zeros(len(V_matricies))
         # labels[:len(V_matricies)//2] = 1
 
-        labels = torch.zeros(len(V_matricies))
         for i in range(len(V_matricies)):
             if labels[i] == 0:
                 v, u = breaking_edges[i]
@@ -100,18 +97,29 @@ class ConvertToTensor(object):
         # labels = torch.tensor(labels_temp).float()
 
         V_matricies_rotated = []
-        for i in range(len(V_matricies)):
+        for i in range(0, len(V_matricies), 2):
             perm = torch.randperm(V_matricies[i].shape[0])
-            V_matricies_rotated.append(V_matricies[i][perm][:, perm])
+            for j in range(2):
+                V_matricies_rotated.append(V_matricies[i+j][perm][:, perm])
 
-        # V_mat = torch.block_diag(*V_matricies_rotated)
-        V_mat = torch.block_diag(*V_matricies)
+        V_mat = torch.block_diag(*V_matricies_rotated)
+        # V_mat = torch.block_diag(*V_matricies)
         C_mat = torch.block_diag(*C_matricies)
 
         return V_mat.to(device), labels.to(device), torch.tensor(colors).to(device), torch.Tensor(splits).to(device), C_mat.to(device)
 
     def random_graph(self):
         return self.get_one(random.choice(self._gp))
+    @staticmethod
+    def get_one(g):
+        # load graph
+        jg = json.load(open(g))
+        mat = torch.Tensor(jg['m']).reshape([jg['v'], jg['v']])
+        mat_adv = mat.clone()
+        cc = jg['change_coord']
+        mat_adv[cc[0], cc[1]] = 1
+        mat_adv[cc[1], cc[0]] = 1
+        return mat, mat_adv, jg['c_number']
 
 
 if __name__ == '__main__':

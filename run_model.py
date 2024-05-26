@@ -17,7 +17,7 @@ from model import GCPNet
 
 EPOC_STEP = 50
 # CHECK_POINT_PATH = './checkpoints/second_fix'
-CHECK_POINT_PATH = './checkpoints/tf_overfit_fix3'
+CHECK_POINT_PATH = './checkpoints/tf_overfit_fix4'
 DATA_SET_PATH = '/content/pickles/pickles/'  # '/content/drive/MyDrive/project_MSC/train_jsons'  #
 DEVICE =  'cpu'  # 'cuda'  #
 
@@ -100,7 +100,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--graph_dir', default='./train_jsons')
     parser.add_argument('--embedding_size', type=int, default=64)
-    parser.add_argument('--batch_size', type=int, default=1)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--tmax', type=int, default=32)
     parser.add_argument('--epochs', type=int, default=5300)
     parser.add_argument('--device', type=str, default='cuda')
@@ -111,17 +111,17 @@ if __name__ == '__main__':
     embedding_size = args.embedding_size
     gcp = GCPNet(embedding_size, tmax=args.tmax, device=args.device)
     gcp.to(args.device)
+
     ds = GraphDataSet(args.graph_dir, batch_size=args.batch_size)
-    dl = DataLoader(ds, batch_size=1, shuffle=True)
 
     test_ds = GraphDataSet(os.path.join("/", *args.graph_dir.split("/")[:-1], "test"), batch_size=args.batch_size) # GraphDataSet(args.graph_dir, batch_size=args.batch_size, limit=1000)
     test_dl = DataLoader(test_ds, batch_size=1, shuffle=True)
 
-    load_from_tf(gcp)
+    # load_from_tf(gcp)
 
     opt = torch.optim.Adam(
         gcp.parameters(), lr=2e-5,
-        # weight_decay=1e-10
+        weight_decay=1e-8
     )
     loss = torch.nn.BCELoss()
     l2norm_scaling = 1e-10
@@ -156,6 +156,8 @@ if __name__ == '__main__':
     prev_train_flag = gcp.training
     if args.test: gcp.eval()
     for i in range(start_epoc, args.epochs):
+        ds.shuffle()
+        dl = DataLoader(ds, batch_size=1, shuffle=True)
         preds = []
         lables_agg = []
         plot_loss = 0
@@ -163,33 +165,23 @@ if __name__ == '__main__':
         t1 = time.perf_counter()
         print('Running epoc: {}'.format(i))
         for j, b in enumerate(dl):
-            # print('Running batch: {}'.format(j))
             if j == epoch_size: break
             M_vv, labels, cn, split, M_vc = b
-            # M_vv = M_vv.squeeze()
             labels = labels.squeeze()
-            # cn = cn.squeeze()
             split = split.squeeze(0)
-            # M_vc = M_vc.squeeze()
             split = [int(s) for s in split]
             M_vv = M_vv.squeeze()
             M_vc = M_vc.squeeze()
 
-            # Added new init
             v_size = M_vv.shape[0]
-            # cn = cn.squeeze()
             opt.zero_grad()
-
-            # Move to Cuda
             M_vv = M_vv.to(device=args.device)
             M_vc = M_vc.to(device=args.device)
 
-            # end move to cuda
-
             pred, V_ret, C_ret = gcp.forward(M_vv, M_vc, split, cn=cn)
             l = loss(pred.to(DEVICE), torch.Tensor(labels).to(device=DEVICE))
-            # preds += pred.tolist() if len(pred.shape)!=0 else [pred.item()]
-            # lables_agg += labels.tolist() if len(labels.shape)!=0 else [labels.item()]
+            preds += pred.tolist() if len(pred.shape)!=0 else [pred.item()]
+            lables_agg += labels.tolist() if len(labels.shape)!=0 else [labels.item()]
             plot_loss += l.detach()
             acc = ((pred.detach().cpu() > 0.5) == torch.Tensor(labels)).sum()/float(cn.shape[1])
             plot_acc += acc
@@ -199,18 +191,16 @@ if __name__ == '__main__':
             if not args.test:
                 # initial_weights = {name: param.clone() for name, param in gcp.named_parameters()}
                 ll = l
-                ll = l + l2norm_scaling * sum([param.norm() ** 2 for param in gcp.parameters()])
+                # ll = l + l2norm_scaling * sum([param.norm() ** 2 for param in gcp.parameters()])
                 ll.backward()
-
-                torch.nn.utils.clip_grad_norm_(gcp.parameters(), global_norm_gradient_clipping_ratio) # Clip the gradients
-
+                # torch.nn.utils.clip_grad_norm_(gcp.parameters(), global_norm_gradient_clipping_ratio) # Clip the gradients
                 opt.step()
                 # for name, param in gcp.named_parameters():
                 #     if not torch.equal(initial_weights[name], param):
-                #         # print(f"Weights updated for: {name}")
+                #         print(f"Weights updated for: {name}")
                 #         break
-                # else:
-                #     print("No weights were updated.")
+                #     else:
+                #         print("No weights were updated.")
         t2 = time.perf_counter()
         print('Time: t2-t1={}'.format(t2-t1))
         plot_acc /= j if j > 0 else 1
@@ -244,13 +234,16 @@ if __name__ == '__main__':
         if best < test_acc or (i % EPOC_STEP) == 0 and not args.test:
             print('Saving model')
             best = save_model(i, gcp, epoc_acc, epoc_loss, opt, test_acc, best)
-        print('ACC:{}\t Accuracy: {}\tLoss: {}\t Test: {}\t Max: {}'.format(sum(epoc_acc)/len(epoc_acc), plot_acc, plot_loss, test_acc, best))
+        print('ACC:{}\t Accuracy: {}\tLoss: {}\t Test: {}\t Max: {}'.format(sum(epoc_acc)/len(epoc_acc), plot_acc, plot_loss, test_acc, best),
+              f"Average label: {sum([(l >= 0.5) for l in lables_agg]) / len(lables_agg)}",
+              f"Average preds: {sum([(p >= 0.5) for p in preds]) / len(preds)}",
+        )
         # print(
-        #       'Accuracy: {}'.format(sum(epoc_acc)/len(epoc_acc)),
-        #       f"Average acc: {sum([((l>=0.5) == (p>=0.5)) for l,p in zip(lables_agg, preds)]) / len(preds)}",
-        #       f"Average label: {sum([(l >= 0.5) for l in lables_agg]) / len(lables_agg)}",
-        #       f"Average preds: {sum([(p>=0.5) for p in preds])/len(preds)}",
-        #       "" if last_pred is None else f"Last pred: {sum([(l>=0.5) == (p>=0.5) for l,p in zip(last_pred, preds)])/len(preds)}",
+        #     #       'Accuracy: {}'.format(sum(epoc_acc)/len(epoc_acc)),
+        #     #       f"Average acc: {sum([((l>=0.5) == (p>=0.5)) for l,p in zip(lables_agg, preds)]) / len(preds)}",
+        #     #   f"Average label: {sum([(l >= 0.5) for l in lables_agg]) / len(lables_agg)}",
+        #     #   f"Average preds: {sum([(p>=0.5) for p in preds])/len(preds)}",
+        #     #       "" if last_pred is None else f"Last pred: {sum([(l>=0.5) == (p>=0.5) for l,p in zip(last_pred, preds)])/len(preds)}",
         #     )
         last_pred = preds
     gcp.train(prev_train_flag)
