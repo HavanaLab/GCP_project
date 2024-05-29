@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 from GraphDataSet import GraphDataSet
 from model import GCPNet
 
+torch.cuda.set_device(0)
 
 EPOC_STEP = 50
 # CHECK_POINT_PATH = './checkpoints/second_fix'

@@ -7,7 +7,7 @@ import random
 import torch
 import numpy as np
 
-import networkx as nx
+# import networkx as nx
 from networkx.algorithms import bipartite
 
 class ConvertToTensor(object):
