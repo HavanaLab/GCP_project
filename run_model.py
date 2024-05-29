@@ -121,11 +121,14 @@ if __name__ == '__main__':
 
     opt = torch.optim.Adam(
         gcp.parameters(), lr=2e-5,
-        weight_decay=1e-8
+        weight_decay=1e-10
     )
-    loss = torch.nn.BCELoss()
+    lr_decay_factor=0.5
+    lr_scheduler_patience=25
+    lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, mode='min', factor=lr_decay_factor,patience=lr_scheduler_patience)
+    loss = torch.nn.BCEWithLogitsLoss(reduction="sum")
     l2norm_scaling = 1e-10
-    global_norm_gradient_clipping_ratio = 0.65
+    global_norm_gradient_clipping_ratio = 0.5
 
     epoc_loss = []
     epoc_acc = []
@@ -193,7 +196,7 @@ if __name__ == '__main__':
                 ll = l
                 # ll = l + l2norm_scaling * sum([param.norm() ** 2 for param in gcp.parameters()])
                 ll.backward()
-                # torch.nn.utils.clip_grad_norm_(gcp.parameters(), global_norm_gradient_clipping_ratio) # Clip the gradients
+                torch.nn.utils.clip_grad_norm_(gcp.parameters(), global_norm_gradient_clipping_ratio)
                 opt.step()
                 # for name, param in gcp.named_parameters():
                 #     if not torch.equal(initial_weights[name], param):
@@ -212,6 +215,7 @@ if __name__ == '__main__':
         if not args.test:
             prev_train_flag_test = gcp.training
             gcp.eval()
+            loss_agg = []
             with torch.no_grad():
                 test_acc = 0
                 for j, b in enumerate(test_dl):
@@ -226,9 +230,12 @@ if __name__ == '__main__':
                     M_vv = M_vv.to(device=args.device)
                     M_vc = M_vc.to(device=args.device)
                     pred, V_ret, C_ret = gcp.forward(M_vv, M_vc, split, cn=cn)
+                    l = loss(pred.to(DEVICE), torch.Tensor(labels).to(device=DEVICE))
+                    loss_agg.append(l)
                     test_acc += ((pred.detach().cpu() > 0.5) == torch.Tensor(labels)).sum()/float(cn.shape[1])
                 test_acc /= j if j > 0 else 1
             gcp.train(prev_train_flag_test)
+            lr_scheduler.step(np.mean(loss_agg))
         else:
             test_acc = -1
         if best < test_acc or (i % EPOC_STEP) == 0 and not args.test:

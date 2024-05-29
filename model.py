@@ -6,7 +6,7 @@ import torch
 from torch import nn
 from torch.nn import LSTM
 
-from lstm import LayerNormLSTM, SIMPLE_LayerNorm_LSTM
+from lstm import LayerNormLSTM, SIMPLE_LayerNorm_LSTM, LayerNormLSTMCell
 # from torch_geometric.nn.models import MLP
 from mlp import MLP
 '''
@@ -33,7 +33,7 @@ The final output of the net would be sigmoid(V_logits <-- V_vote(V))
 
 
 class GCPNet(nn.Module):
-    def __init__(self, embedding_size, tmax=32, device='cpu', our_way=True):
+    def __init__(self, embedding_size, tmax=32, device='cpu', our_way=False):
         super(GCPNet, self).__init__()
         self.tmax = tmax
         self.device = device
@@ -46,9 +46,9 @@ class GCPNet(nn.Module):
         # self.mlpV = MLP(in_channels=embedding_size, hidden_channels=embedding_size, out_channels=embedding_size, num_layers=3)
         self.mlpV = MLP(in_dim=embedding_size, hidden_dim=embedding_size, out_dim=embedding_size).to(device)
         # self.LSTM_v = LSTM(input_size=embedding_size*2, hidden_size=embedding_size)
-        self.LSTM_v = LayerNormLSTM(input_size=embedding_size*2, hidden_size=embedding_size).to(device) if our_way else SIMPLE_LayerNorm_LSTM(input_size=embedding_size*2, hidden_size=embedding_size).to(device)
+        self.LSTM_v = LayerNormLSTM(input_size=embedding_size*2, hidden_size=embedding_size).to(device) if our_way else LayerNormLSTMCell(2*embedding_size, embedding_size, activation=torch.relu, device=self.device)#SIMPLE_LayerNorm_LSTM(input_size=embedding_size*2, hidden_size=embedding_size).to(device)
         # self.LSTM_c = LSTM(input_size=embedding_size, hidden_size=embedding_size)
-        self.LSTM_c = LayerNormLSTM(input_size=embedding_size, hidden_size=embedding_size).to(device) if our_way else SIMPLE_LayerNorm_LSTM(input_size=embedding_size, hidden_size=embedding_size).to(device)
+        self.LSTM_c = LayerNormLSTM(input_size=embedding_size, hidden_size=embedding_size).to(device) if our_way else LayerNormLSTMCell(embedding_size, embedding_size, activation=torch.relu, device=self.device)#SIMPLE_LayerNorm_LSTM(input_size=embedding_size, hidden_size=embedding_size).to(device)
         # self.V_vote_mlp = MLP(in_channels=embedding_size, hidden_channels=embedding_size, out_channels=1, num_layers=3)
         self.V_vote_mlp = MLP(in_dim=embedding_size, hidden_dim=embedding_size, out_dim=embedding_size).to(device)
         self.V_h_orig = (torch.rand((1, embedding_size)).to(device), torch.zeros((1, embedding_size)).to(device))

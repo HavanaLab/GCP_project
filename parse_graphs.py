@@ -96,14 +96,13 @@ class ConvertToTensor(object):
         # splits = splits_temp
         # labels = torch.tensor(labels_temp).float()
 
-        V_matricies_rotated = []
-        for i in range(0, len(V_matricies), 2):
-            perm = torch.randperm(V_matricies[i].shape[0])
-            for j in range(2):
-                V_matricies_rotated.append(V_matricies[i+j][perm][:, perm])
-
-        V_mat = torch.block_diag(*V_matricies_rotated)
-        # V_mat = torch.block_diag(*V_matricies)
+        # V_matricies_rotated = []
+        # for i in range(0, len(V_matricies), 2):
+        #     perm = torch.randperm(V_matricies[i].shape[0])
+        #     for j in range(2):
+        #         V_matricies_rotated.append(V_matricies[i+j][perm][:, perm])
+        # V_mat = torch.block_diag(*V_matricies_rotated)
+        V_mat = torch.block_diag(*V_matricies)
         C_mat = torch.block_diag(*C_matricies)
 
         return V_mat.to(device), labels.to(device), torch.tensor(colors).to(device), torch.Tensor(splits).to(device), C_mat.to(device)

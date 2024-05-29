@@ -1,24 +1,55 @@
 import torch
 import torch.nn as nn
-
+import torch.nn.functional as F
 
 class NormLSTM(nn.Module):
-    def __init__(self, dims):
+    def __init__(self, dims, clipping=False):
         super().__init__()
         self.gamma = nn.Parameter(torch.empty(dims))
         self.beta = nn.Parameter(torch.empty(dims))
+        self.clipping = clipping
 
     def forward(self, inputs):
         variance, mean = torch.var_mean(inputs, dim=-1, keepdim=True, correction=0)
-        shifted = torch.clamp((inputs-mean), min=-1e+38, max=1e+38)#(inputs-mean)
-        variance = ((shifted**2).sum(-1)/(inputs.shape[-1])).unsqueeze(-1)
+        shifted = inputs-mean
+        if self.clipping:
+            shifted = torch.clamp(shifted, min=-1, max=1)
+            variance = ((shifted**2).sum(-1)/(inputs.shape[-1])).unsqueeze(-1)
         res = shifted/torch.sqrt(variance + 1e-12)*self.gamma + self.beta
         return res
 
 
-class LayerNormLSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers=1, activation=torch.relu, my_layer_norm=True):
-        super().__init__()
+class LayerNormLSTMCell(nn.LSTMCell):
+
+    def __init__(self, input_size, hidden_size, activation=torch.tanh, device="cpu", bias=True):
+        super().__init__(input_size, hidden_size, bias)
+        self.activation = activation
+        self.hidden_size = hidden_size
+        self.ln_ih = nn.LayerNorm(4 * hidden_size).to(device)
+        self.ln_hh = nn.LayerNorm(4 * hidden_size).to(device)
+        self.ln_ho = nn.LayerNorm(hidden_size).to(device)
+
+    def forward(self, input, hidden=None):
+        if hidden is None:
+            hx = input.new_zeros(input.size(0), self.hidden_size, requires_grad=False)
+            cx = input.new_zeros(input.size(0), self.hidden_size, requires_grad=False)
+        else:
+            hx, cx = hidden
+
+        gates = self.ln_ih(F.linear(input, self.weight_ih, self.bias_ih)) + self.ln_hh(F.linear(hx, self.weight_hh, self.bias_hh))
+        i, f, o, g = gates.chunk(4, -1)
+        i = i.sigmoid()
+        f = f.sigmoid()
+        o = o.sigmoid()
+        g = g.tanh()
+
+        cy = (f * cx) + (i * g)
+        hy = o * self.activation(self.ln_ho(cy))
+        return hy, (hy, cy)
+
+class LayerNormLSTM(nn.LSTMCell):
+    def __init__(self, input_size, hidden_size, num_layers=1, activation=torch.relu, my_layer_norm=False):
+        super().__init__(input_size, hidden_size, bias=True)
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
@@ -28,8 +59,6 @@ class LayerNormLSTM(nn.Module):
         self.ln_hc = NormLSTM(hidden_size) if my_layer_norm else nn.LayerNorm(hidden_size)
         self.ln_hcy = NormLSTM(hidden_size) if my_layer_norm else nn.LayerNorm(hidden_size)
 
-        self.fc_ih = nn.Linear(input_size, 4 * hidden_size)
-        self.fc_hh = nn.Linear(hidden_size, 4 * hidden_size)
         self.fc = nn.Linear(input_size + hidden_size, 4 * hidden_size, bias=False)
         self.activation = activation
 
