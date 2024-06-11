@@ -14,8 +14,9 @@ class ConvertToTensor(object):
     '''
     This class converts JSON graphs into torch tensors to deal with.
     '''
-    def __init__(self, graph_dir_path, device='cuda'):
+    def __init__(self, graph_dir_path, device='cuda', filter = lambda x: True):
         self._gp = glob.glob('{}/*.json'.format(graph_dir_path))
+        self._gp = [g for g in self._gp if filter(g)]
         self.device = device
 
     BATCH_CACHE = {}

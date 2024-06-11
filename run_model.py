@@ -18,7 +18,7 @@ torch.cuda.set_device(0)
 
 EPOC_STEP = 50
 # CHECK_POINT_PATH = './checkpoints/second_fix'
-CHECK_POINT_PATH = './checkpoints/tf_overfit_fix4_2'
+CHECK_POINT_PATH = './checkpoints/only_5col'
 DATA_SET_PATH = '/content/pickles/pickles/'  # '/content/drive/MyDrive/project_MSC/train_jsons'  #
 DEVICE =  'cpu'  # 'cuda'  #
 
@@ -114,13 +114,22 @@ if __name__ == '__main__':
     embedding_size = args.embedding_size
     gcp = GCPNet(embedding_size, tmax=args.tmax, device=args.device)
     gcp.to(args.device)
+    if torch.cuda.device_count() > 1:
+        devices = [0,1,2]
+        print("Let's use", len(devices), "GPUs!")
+        gcp = torch.nn.DataParallel(gcp, device_ids=devices)
 
-    ds = GraphDataSet(args.graph_dir, batch_size=args.batch_size)
+    ds = GraphDataSet(
+        args.graph_dir,
+        batch_size=args.batch_size,
+        filter=lambda g: g.split('/')[-1].split("_")[1]=="5"
+    )
 
     test_ds = GraphDataSet(
         # os.path.join("/", *args.graph_dir.split("/")[:-1], "test"),
         "/home/elad/Documents/kcol/tmp/json/test",
-        batch_size=args.batch_size
+        batch_size=args.batch_size,
+        # filter = lambda g: (g.split('/')[-1].split("_")[1] == "5")
     ) # GraphDataSet(args.graph_dir, batch_size=args.batch_size, limit=1000)
     test_dl = DataLoader(test_ds, batch_size=1, shuffle=True)
 

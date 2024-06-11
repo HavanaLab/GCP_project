@@ -8,14 +8,17 @@ from torch.utils.data import Dataset
 
 
 class GraphDataSet(Dataset):
-    def __init__(self, graph_dir, batch_size, get_true=False, limit=None):
+    def __init__(self, graph_dir, batch_size, get_true=False, limit=None, filter=lambda x: True):
         self.bs = batch_size
         self.gd = graph_dir
         self.get_true = get_true
         self.jsons = glob.glob('{}/*.json'.format(self.gd))
+        self.jsons = [g for g in self.jsons if filter(g)]
+
         limit = limit or len(self.jsons)
         self.jsons = self.jsons[:limit]
         self.idx_mapping = self.get_idx_mapping()
+        self.filter = filter
 
     def shuffle(self):
         self.idx_mapping = self.get_idx_mapping()
