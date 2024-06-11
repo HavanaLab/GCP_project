@@ -18,7 +18,7 @@ torch.cuda.set_device(0)
 
 EPOC_STEP = 50
 # CHECK_POINT_PATH = './checkpoints/second_fix'
-CHECK_POINT_PATH = './checkpoints/tf_overfit_fix4'
+CHECK_POINT_PATH = './checkpoints/tf_overfit_fix4_2'
 DATA_SET_PATH = '/content/pickles/pickles/'  # '/content/drive/MyDrive/project_MSC/train_jsons'  #
 DEVICE =  'cpu'  # 'cuda'  #
 
@@ -99,13 +99,15 @@ def load_from_tf(gcp):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--graph_dir', default='./train_jsons')
-    parser.add_argument('--embedding_size', type=int, default=64)
-    parser.add_argument('--batch_size', type=int, default=8)
+    # parser.add_argument('--graph_dir', default='./data_json')
+    # parser.add_argument('--graph_dir', default='/home/elad/Documents/kcol/tmp/json/train')
+    parser.add_argument('--graph_dir', default='/home/elad/Documents/kcol/GCP_project/data_json/data')
+    parser.add_argument('--embedding_size', type=int, default=128)
+    parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--tmax', type=int, default=32)
     parser.add_argument('--epochs', type=int, default=5300)
     parser.add_argument('--device', type=str, default='cuda')
-    parser.add_argument('--check_path', type=str, default=None)
+    parser.add_argument('--check_path', type=str, default="checkpoints/tf_overfit_fix4/best.pt")
     parser.add_argument('--test', type=bool, default=False)
     args = parser.parse_args()
 
@@ -115,25 +117,31 @@ if __name__ == '__main__':
 
     ds = GraphDataSet(args.graph_dir, batch_size=args.batch_size)
 
-    test_ds = GraphDataSet(os.path.join("/", *args.graph_dir.split("/")[:-1], "test"), batch_size=args.batch_size) # GraphDataSet(args.graph_dir, batch_size=args.batch_size, limit=1000)
+    test_ds = GraphDataSet(
+        # os.path.join("/", *args.graph_dir.split("/")[:-1], "test"),
+        "/home/elad/Documents/kcol/tmp/json/test",
+        batch_size=args.batch_size
+    ) # GraphDataSet(args.graph_dir, batch_size=args.batch_size, limit=1000)
     test_dl = DataLoader(test_ds, batch_size=1, shuffle=True)
 
     # load_from_tf(gcp)
 
     opt = torch.optim.Adam(
-        gcp.parameters(), lr=2e-5,
+        gcp.parameters(),
+        lr=2e-5,
+        #lr=2e-7,
         weight_decay=1e-10
     )
     lr_decay_factor=0.5
     lr_scheduler_patience=25
     lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, mode='min', factor=lr_decay_factor,patience=lr_scheduler_patience)
-    loss = torch.nn.BCEWithLogitsLoss(reduction="sum")
+    critirion = torch.nn.BCEWithLogitsLoss(reduction="mean")
     l2norm_scaling = 1e-10
     global_norm_gradient_clipping_ratio = 0.5
 
     epoc_loss = []
     epoc_acc = []
-    epoch_size = 128
+    epoch_size = 100_000 / embedding_size #128
     accumulated_size = 0
     start_epoc = 0
     best = -1
@@ -145,7 +153,8 @@ if __name__ == '__main__':
         if "best" in checkpoint:
             best = checkpoint["best"]
 
-        epoc_acc = checkpoint['acc'] if hasattr(epoc_acc, '__iter__') else epoc_acc.append(checkpoint['acc'])
+        epoc_acc = (checkpoint['acc'] if len(checkpoint['acc'].size()) >0 else [checkpoint['acc']] ) if hasattr(epoc_acc, '__iter__')  else [checkpoint['acc']] 
+         
 
         start_epoch_string = args.check_path.split("/")[-1].split("_")[-1].split(".")[0]
         if "epoc" in checkpoint:
@@ -154,7 +163,7 @@ if __name__ == '__main__':
             start_epoc = int(start_epoch_string)
 
         start_epoc = checkpoint['epoc']
-
+    #print("------------------------", args.check_path is not None, hasattr(epoc_acc, '__iter__'), epoc_acc)
     last_pred = None
 
     prev_train_flag = gcp.training
@@ -178,12 +187,12 @@ if __name__ == '__main__':
             M_vc = M_vc.squeeze()
 
             v_size = M_vv.shape[0]
-            opt.zero_grad()
             M_vv = M_vv.to(device=args.device)
             M_vc = M_vc.to(device=args.device)
 
-            pred, V_ret, C_ret = gcp.forward(M_vv, M_vc, split, cn=cn)
-            l = loss(pred.to(DEVICE), torch.Tensor(labels).to(device=DEVICE))
+            opt.zero_grad()
+            pred, means, V_ret, C_ret = gcp.forward(M_vv, M_vc, split, cn=cn)
+            l = critirion(means.to(DEVICE), torch.Tensor(labels).to(device=DEVICE))
             preds += pred.tolist() if len(pred.shape)!=0 else [pred.item()]
             lables_agg += labels.tolist() if len(labels.shape)!=0 else [labels.item()]
             plot_loss += l.detach()
@@ -191,20 +200,22 @@ if __name__ == '__main__':
             plot_acc += acc
             # print(cn.shape[1])
             # accumulated_size += 1 if len(pred.shape) == 0 else pred.shape[0]
-
+            print(f"\t Epoch: {i} Batch: {j} Loss: {l:.4f} Acc: {acc:.4f} AVG_label:{torch.Tensor(labels).mean()} Mean_pred: {pred.mean():.4f} Mean_rounded_preb: {(pred>0.5).float().mean():.4f}")
+            # print(f"\t\t lables: {labels.tolist()}\n\t\tpreds: {pred.tolist()}\n\t\t rounded_preds: {(pred>0.5).tolist()}")
             if not args.test:
-                # initial_weights = {name: param.clone() for name, param in gcp.named_parameters()}
+                initial_weights = {name: param.clone() for name, param in gcp.named_parameters()}
                 ll = l
                 # ll = l + l2norm_scaling * sum([param.norm() ** 2 for param in gcp.parameters()])
                 ll.backward()
                 torch.nn.utils.clip_grad_norm_(gcp.parameters(), global_norm_gradient_clipping_ratio)
                 opt.step()
-                # for name, param in gcp.named_parameters():
-                #     if not torch.equal(initial_weights[name], param):
-                #         print(f"Weights updated for: {name}")
-                #         break
-                #     else:
-                #         print("No weights were updated.")
+                for name, param in gcp.named_parameters():
+                    if not torch.equal(initial_weights[name], param):
+                        # print(f"Weights updated for: {name}")
+                        pass
+                        break
+                    else:
+                        print(f"No weights were updated for {name}")
         t2 = time.perf_counter()
         print('Time: t2-t1={}'.format(t2-t1))
         plot_acc /= j if j > 0 else 1
@@ -230,8 +241,8 @@ if __name__ == '__main__':
                     v_size = M_vv.shape[0]
                     M_vv = M_vv.to(device=args.device)
                     M_vc = M_vc.to(device=args.device)
-                    pred, V_ret, C_ret = gcp.forward(M_vv, M_vc, split, cn=cn)
-                    l = loss(pred.to(DEVICE), torch.Tensor(labels).to(device=DEVICE))
+                    pred, means, V_ret, C_ret = gcp.forward(M_vv, M_vc, split, cn=cn)
+                    l = critirion(means.to(DEVICE), torch.Tensor(labels).to(device=DEVICE))
                     loss_agg.append(l)
                     test_acc += ((pred.detach().cpu() > 0.5) == torch.Tensor(labels)).sum()/float(cn.shape[1])
                 test_acc /= j if j > 0 else 1
@@ -245,6 +256,7 @@ if __name__ == '__main__':
         print('ACC:{}\t Accuracy: {}\tLoss: {}\t Test: {}\t Max: {}'.format(sum(epoc_acc)/len(epoc_acc), plot_acc, plot_loss, test_acc, best),
               f"Average label: {sum([(l >= 0.5) for l in lables_agg]) / len(lables_agg)}",
               f"Average preds: {sum([(p >= 0.5) for p in preds]) / len(preds)}",
+              f"learning rate: {opt.param_groups[0]['lr']}"
         )
         # print(
         #     #       'Accuracy: {}'.format(sum(epoc_acc)/len(epoc_acc)),

@@ -48,7 +48,7 @@ class LayerNormLSTMCell(nn.LSTMCell):
         return hy, (hy, cy)
 
 class LayerNormLSTM(nn.LSTMCell):
-    def __init__(self, input_size, hidden_size, num_layers=1, activation=torch.relu, my_layer_norm=False):
+    def __init__(self, input_size, hidden_size, num_layers=1, activation=torch.relu, my_layer_norm=True):
         super().__init__(input_size, hidden_size, bias=True)
         self.input_size = input_size
         self.hidden_size = hidden_size

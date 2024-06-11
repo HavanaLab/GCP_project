@@ -57,14 +57,15 @@ class ConvertToTensor(object):
                 ConvertToTensor.BATCH_CACHE[j] = (v_mat, c_mat, be, c, split)
 
             v_mat, c_mat, b_edges, c, s = ConvertToTensor.BATCH_CACHE[j]
-            V_matricies.append(v_mat)
-            C_matricies.append(c_mat)
+            V_matricies.append(v_mat.clone())
+            C_matricies.append(c_mat.clone())
             breaking_edges.append(b_edges)
             colors.append(c)
             splits.append(s)
 
         labels = torch.randint(0, 2, size=(len(V_matricies),)).float()
-        labels = torch.tensor([1.0,0.0]*(len(jsons)//2))
+        # labels = torch.randint(1, 2, size=(len(V_matricies),)).float()
+        labels = torch.tensor([1.0, 0.0]*(len(jsons)//2))
         # labels = torch.zeros(len(V_matricies))
         # labels[:len(V_matricies)//2] = 1
 
@@ -96,6 +97,7 @@ class ConvertToTensor(object):
         # splits = splits_temp
         # labels = torch.tensor(labels_temp).float()
 
+        # ramdomize the order of the graphs
         # V_matricies_rotated = []
         # for i in range(0, len(V_matricies), 2):
         #     perm = torch.randperm(V_matricies[i].shape[0])

@@ -14,7 +14,7 @@ from gurobipy import Model, GRB
 import gurobipy as gpy
 
 gurobi_licnese = False
-
+dist_dict = {}
 count = 0
 options = {
     "WLSACCESSID" : "d2cbfec6-a740-4a94-86f2-0f033ad4633d",
@@ -65,6 +65,7 @@ with ExitStack() as stack:
                 raise Exception("Gurobi is unsure about the problem")
 
     def from_text_to_JSON(path):
+        global dist_dict
         files = glob.glob('{}/*.graph'.format(path))
         for i, g in enumerate(tqdm(files)):
             # print('/rworking On {} from {}'.format(i, len(files)))
@@ -95,12 +96,15 @@ with ExitStack() as stack:
                     c_number_flag = False
                 if 'CHROM_NUMBER' in l:
                     c_number_flag = True
-            m = np.array(m).reshape(v, v)
-            m2 = m.copy()
-            m2[change_coord[0], change_coord[1]]= m2[change_coord[1], change_coord[0]] = 1
-            if not (solve_csp(m, c_number) is not None and solve_csp(m, c_number-1) is None and solve_csp(m2,c_number) is None):
-                print('Problem with {}'.format(g))
+            # m = np.array(m).reshape(v, v)
+            # m2 = m.copy()
+            # m2[change_coord[0], change_coord[1]]= m2[change_coord[1], change_coord[0]] = 1
+            # if not (solve_csp(m, c_number) is not None and solve_csp(m, c_number-1) is None and solve_csp(m2,c_number) is None):
+            #     print('Problem with {}'.format(g))
             # json.dump({'c_number': c_number, 'change_coord': change_coord, 'm': m, 'v': v}, open('{}.json'.format(g), 'w'))
+            if v not in dist_dict: dist_dict[v] = {}
+            if c_number not in dist_dict[v]: dist_dict[v][c_number] = 0
+            dist_dict[v][c_number] += 1
 
-
-    from_text_to_JSON('./data4')
+    from_text_to_JSON('./data*')
+    print(dist_dict)

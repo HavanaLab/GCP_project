@@ -33,7 +33,7 @@ The final output of the net would be sigmoid(V_logits <-- V_vote(V))
 
 
 class GCPNet(nn.Module):
-    def __init__(self, embedding_size, tmax=32, device='cpu', our_way=False):
+    def __init__(self, embedding_size, tmax=32, device='cpu', our_way=True):
         super(GCPNet, self).__init__()
         self.tmax = tmax
         self.device = device
@@ -96,9 +96,11 @@ class GCPNet(nn.Module):
             C = C.squeeze(0,1)
         v_vote = self.V_vote_mlp(V.squeeze())
         v_vote = v_vote.squeeze().split(slice_idx)
-        ret = [torch.sigmoid(v.mean()) for v in v_vote]
-        stacked_ret = torch.vstack(ret).squeeze()
-        return stacked_ret, V, C
+        means = [v.mean() for v in v_vote]
+        stacked_means = torch.vstack(means).squeeze()
+        pred = [torch.sigmoid(v) for v in means]
+        stacked_pred = torch.vstack(pred).squeeze()
+        return stacked_pred, stacked_means, V, C
 
 
     def forward(self, M_vv, M_vc, slice_idx, cn=0):

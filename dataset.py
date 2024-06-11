@@ -11,9 +11,9 @@ from gurobipy import Model, GRB
 
 import gurobipy as gpy
 
-gurobi_licnese = False
+gurobi_licnese = True
 gurobi_licnese_range_help = lambda ra: ra[1] >6 or  (ra[0]>46 and ra[1]>5) or (ra[0]>56 and ra[1]>4)
-gurobi_licnese_range = (lambda ta: not gurobi_licnese_range_help(ta)) if gurobi_licnese else (lambda ta: gurobi_licnese_range_help(ta))
+gurobi_licnese_range = (lambda ta: gurobi_licnese_range_help(ta)) if gurobi_licnese else (lambda ta: not gurobi_licnese_range_help(ta))
 
 count = 0
 options = {
@@ -21,6 +21,145 @@ options = {
     "WLSSECRET": "48dc3657-016b-48bf-b831-8c1303efe0f4",
     "LICENSEID": 2521086,
 }
+
+options2 = {
+    "WLSACCESSID": "e1989b66-f136-4ffc-8232-42a1d0131c5d",
+    "WLSSECRET": "072668a4-0722-4b0c-a4d7-f02bc40aa91b",
+    "LICENSEID": 2523648,
+}
+
+# import cplex
+# from cplex.exceptions import CplexError
+# def solve_csp_cplex(adj_matrix, c):
+#     try:
+#         num_nodes = len(adj_matrix)
+#         my_prob = cplex.Cplex()
+#         my_prob.parameters.output.writelevel = 0
+#         my_prob.set_log_stream(None)
+#         my_prob.set_error_stream(None)
+#         my_prob.set_warning_stream(None)
+#         my_prob.set_results_stream(None)
+#
+#         # Create binary variables for each node-color combination
+#         var_names = []
+#         for i in range(num_nodes):
+#             for color in range(c):
+#                 var_names.append(f"x_{i}_{color}")
+#         my_prob.variables.add(names=var_names, types=[my_prob.variables.type.binary] * (num_nodes * c))
+#
+#         # Constraint: Each node must be assigned exactly one color
+#         for i in range(num_nodes):
+#             my_prob.linear_constraints.add(
+#                 lin_expr=[cplex.SparsePair(ind=[var_names[i * c + color] for color in range(c)], val=[1.0] * c)],
+#                 senses=["E"],
+#                 rhs=[1.0],
+#                 names=[f"node_{i}_color"]
+#             )
+#
+#         # Constraint: Adjacent nodes must have different colors
+#         for i in range(num_nodes):
+#             for j in range(i + 1, num_nodes):
+#                 if adj_matrix[i][j] == 1:
+#                     for color in range(c):
+#                         my_prob.linear_constraints.add(
+#                             lin_expr=[cplex.SparsePair(ind=[var_names[i * c + color], var_names[j * c + color]],
+#                                                        val=[1.0, -1.0])],
+#                             senses=["L"],
+#                             rhs=[0.0],
+#                             names=[f"adj_{i}_{j}_color_{color}"]
+#                         )
+#
+#         # Set objective: minimize 0 (dummy objective)
+#         my_prob.objective.set_sense(my_prob.objective.sense.minimize)
+#
+#         # Solve the ILP
+#         my_prob.solve()
+#
+#         # Check if feasible solution exists
+#         if my_prob.solution.get_status() == my_prob.solution.status.optimal:
+#             return True
+#         else:
+#             return None
+#
+#     except CplexError as exc:
+#         print(f"Error: {exc}")
+
+
+def solve_csp2(M, n_colors, nmin=40):
+    model = cp_model.CpModel()
+    N = len(M)
+
+    variables = [model.NewIntVar(0, n_colors - 1, '{i}'.format(i=i)) for i in range(N)]
+
+    for i in range(N):
+        for j in range(i + 1, N):
+            if M[i][j] == 1:
+                model.Add(variables[i] != variables[j])
+
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = int(((10.0 / nmin) * N))
+    status = solver.Solve(model)
+
+    if status == cp_model.FEASIBLE or status == cp_model.OPTIMAL:
+        solution = dict()
+        for k in range(N):
+            solution[k] = solver.Value(variables[k])
+        return solution
+    elif status == cp_model.INFEASIBLE:
+        return None
+    else:
+        raise Exception("CSP is unsure about the problem")
+
+
+
+def self_conrained_solve_csp(M, n_colors, gurobi_licnese=True):
+    options = {
+        "WLSACCESSID": "d2cbfec6-a740-4a94-86f2-0f033ad4633d",
+        "WLSSECRET": "48dc3657-016b-48bf-b831-8c1303efe0f4",
+        "LICENSEID": 2521086,
+    }
+
+    N = len(M)
+
+    if N <= n_colors:
+        return {i: i for i in range(n_colors)}
+    with ExitStack() as stack:
+        env = stack.enter_context(gpy.Env(params=options)) if gurobi_licnese else None
+        model = stack.enter_context(gpy.Model(env=env)) if gurobi_licnese else gpy.Model("GCP")
+        model.setParam('OutputFlag', 0)
+
+        # Create variables
+        x = {}
+        for i in range(N):
+            for j in range(n_colors):
+                x[i, j] = model.addVar(vtype=GRB.BINARY, name=f'x_{i}_{j}')
+
+        # Each node is assigned exactly one color
+        for i in range(N):
+            model.addConstr(sum(x[i, j] for j in range(n_colors)) == 1)
+
+        # Adjacent nodes do not share the same color
+        for i in range(N):
+            for j in range(i + 1, N):
+                if M[i][j] == 1:
+                    for k in range(n_colors):
+                        model.addConstr(x[i, k] + x[j, k] <= 1)
+
+        model.optimize()
+
+        if model.status == GRB.OPTIMAL:
+            solution = {}
+            for i in range(N):
+                for j in range(n_colors):
+                    if x[i, j].x > 0.5:
+                        solution[i] = j
+            return solution
+        elif model.status == GRB.INFEASIBLE:
+            return None
+        else:
+            raise Exception("Gurobi is unsure about the problem")
+
+
 with ExitStack() as stack:
     env = stack.enter_context(gpy.Env(params=options)) if gurobi_licnese else None
 
@@ -112,31 +251,6 @@ with ExitStack() as stack:
             else:
                 raise Exception("Gurobi is unsure about the problem")
 
-
-    def solve_csp2(M, n_colors, nmin=40):
-        model = cp_model.CpModel()
-        N = len(M)
-
-        variables = [model.NewIntVar(0, n_colors - 1, '{i}'.format(i=i)) for i in range(N)]
-
-        for i in range(N):
-            for j in range(i + 1, N):
-                if M[i][j] == 1:
-                    model.Add(variables[i] != variables[j])
-
-        solver = cp_model.CpSolver()
-        solver.parameters.max_time_in_seconds = int(((10.0 / nmin) * N))
-        status = solver.Solve(model)
-
-        if status == cp_model.FEASIBLE or status == cp_model.OPTIMAL:
-            solution = dict()
-            for k in range(N):
-                solution[k] = solver.Value(variables[k])
-            return solution
-        elif status == cp_model.INFEASIBLE:
-            return None
-        else:
-            raise Exception("CSP is unsure about the problem")
 
 
     def is_cn(Ma, cn_i):
@@ -243,7 +357,6 @@ with ExitStack() as stack:
             Cn = np.random.randint(min(list(prob_constraints.keys())), max(list(prob_constraints.keys())) + 1)
             # Cn = ra[1]
             N,Cn = instances[z]
-
 
             lim_inf, lim_sup = prob_constraints[Cn][0], prob_constraints[Cn][1]
             p_connected = random.uniform(lim_inf, lim_sup)
@@ -421,7 +534,7 @@ with ExitStack() as stack:
         # Define argument parser
         parser = argparse.ArgumentParser(description='Process some integers.')
         parser.add_argument('-samples', default=150_000, type=int, help='How many samples?')
-        parser.add_argument('-path', default='data_temp', type=str, help='Save path')
+        parser.add_argument('-path', default='data_final4', type=str, help='Save path')
         parser.add_argument('-nmin', default=40, type=int, help='Min. number of vertices')
         parser.add_argument('-nmax', default=60, type=int, help='Max. number of vertices')
         parser.add_argument('--train', action='store_true', help='To define the seed')
