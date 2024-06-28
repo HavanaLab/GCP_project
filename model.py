@@ -105,3 +105,28 @@ class GCPNet(nn.Module):
 
     def forward(self, M_vv, M_vc, slice_idx, cn=0):
         return self.elad_style2(M_vv, M_vc, slice_idx, cn)
+
+    def load_all_attributes(model, PATH):
+        # Load the state dictionary from the file
+        state_dict = torch.load(PATH)
+
+        # Iterate over all attributes of the model
+        for name, value in model.__dict__.items():
+            # If the attribute is in the state dict and it's a tensor, load it into the model
+            if name in state_dict and isinstance(value, torch.Tensor):
+                setattr(model, name, state_dict[name])
+
+        # Load the parameters of the model
+        model.load_state_dict(state_dict)
+
+    def save_all_attributes(model):
+        # Get the state dict of the model
+        state_dict = model.state_dict()
+
+        # Iterate over all attributes of the model
+        for name, value in model.__dict__.items():
+            # If the attribute is not in the state dict and it's a tensor, add it to the state dict
+            if name not in state_dict and isinstance(value, torch.Tensor):
+                state_dict[name] = value
+
+        return state_dict
