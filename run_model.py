@@ -1,4 +1,3 @@
-
 import numpy as np
 import argparse
 import cProfile
@@ -14,11 +13,19 @@ from torch.utils.data import DataLoader
 from GraphDataSet import GraphDataSet
 from model import GCPNet
 
-torch.cuda.set_device(0)
+import sys
+
+
+
+device_id = 2
+if len(sys.argv) > 1:
+  device_id= int(sys.argv[1])
+  print("device is", device_id) 
+torch.cuda.set_device(device_id)
 
 EPOC_STEP = 50
 # CHECK_POINT_PATH = './checkpoints/second_fix'
-CHECK_POINT_PATH = './checkpoints/only_5col'
+CHECK_POINT_PATH = f'./checkpoints/from_scratch{device_id}'
 DATA_SET_PATH = '/content/pickles/pickles/'  # '/content/drive/MyDrive/project_MSC/train_jsons'  #
 DEVICE =  'cpu'  # 'cuda'  #
 
@@ -101,33 +108,35 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # parser.add_argument('--graph_dir', default='./data_json')
     # parser.add_argument('--graph_dir', default='/home/elad/Documents/kcol/tmp/json/train')
-    parser.add_argument('--graph_dir', default='/home/elad/Documents/kcol/GCP_project/data_json/data')
+    parser.add_argument('--graph_dir', default='/home/shellad/kcol/GNN_GCP/json_data')
     parser.add_argument('--embedding_size', type=int, default=128)
     parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--tmax', type=int, default=32)
+    parser.add_argument('--tmax', type=int, default=30)
     parser.add_argument('--epochs', type=int, default=5300)
     parser.add_argument('--device', type=str, default='cuda')
-    parser.add_argument('--check_path', type=str, default="checkpoints/tf_overfit_fix4/best.pt")
+    #parser.add_argument('--check_path', type=str, default="checkpoints/checkpoint_large_data/best.pt")
+    parser.add_argument('--check_path', type=str, default=None)
     parser.add_argument('--test', type=bool, default=False)
     args = parser.parse_args()
 
     embedding_size = args.embedding_size
     gcp = GCPNet(embedding_size, tmax=args.tmax, device=args.device)
     gcp.to(args.device)
-    if torch.cuda.device_count() > 1:
-        devices = [0,1,2]
-        print("Let's use", len(devices), "GPUs!")
-        gcp = torch.nn.DataParallel(gcp, device_ids=devices)
+    # if torch.cuda.device_count() > 1:
+    #     devices = [0,1,2]
+    #     print("Let's use", len(devices), "GPUs!")
+    #     gcp = torch.nn.DataParallel(gcp, device_ids=devices)
 
     ds = GraphDataSet(
         args.graph_dir,
         batch_size=args.batch_size,
-        filter=lambda g: g.split('/')[-1].split("_")[1]=="5"
+        #filter=lambda g: g.split('/')[-1].split("_")[1]=="5"
     )
 
     test_ds = GraphDataSet(
         # os.path.join("/", *args.graph_dir.split("/")[:-1], "test"),
-        "/home/elad/Documents/kcol/tmp/json/test",
+        #"/home/elad/Documents/kcol/tmp/json/test",
+        "/home/shellad/kcol/tmp/jsons/test",
         batch_size=args.batch_size,
         # filter = lambda g: (g.split('/')[-1].split("_")[1] == "5")
     ) # GraphDataSet(args.graph_dir, batch_size=args.batch_size, limit=1000)
@@ -156,7 +165,7 @@ if __name__ == '__main__':
     best = -1
     # load checkpoint
     if args.check_path is not None:
-        checkpoint = torch.load(args.check_path)
+        checkpoint = torch.load(args.check_path, map_location="cpu")
         gcp.load_state_dict(checkpoint['model'])
         opt.load_state_dict(checkpoint['optimizer_state_dict'])
         if "best" in checkpoint:
@@ -209,22 +218,22 @@ if __name__ == '__main__':
             plot_acc += acc
             # print(cn.shape[1])
             # accumulated_size += 1 if len(pred.shape) == 0 else pred.shape[0]
-            print(f"\t Epoch: {i} Batch: {j} Loss: {l:.4f} Acc: {acc:.4f} AVG_label:{torch.Tensor(labels).mean()} Mean_pred: {pred.mean():.4f} Mean_rounded_preb: {(pred>0.5).float().mean():.4f}")
             # print(f"\t\t lables: {labels.tolist()}\n\t\tpreds: {pred.tolist()}\n\t\t rounded_preds: {(pred>0.5).tolist()}")
             if not args.test:
-                initial_weights = {name: param.clone() for name, param in gcp.named_parameters()}
+                #initial_weights = {name: param.clone() for name, param in gcp.named_parameters()}
                 ll = l
                 # ll = l + l2norm_scaling * sum([param.norm() ** 2 for param in gcp.parameters()])
                 ll.backward()
                 torch.nn.utils.clip_grad_norm_(gcp.parameters(), global_norm_gradient_clipping_ratio)
                 opt.step()
-                for name, param in gcp.named_parameters():
-                    if not torch.equal(initial_weights[name], param):
-                        # print(f"Weights updated for: {name}")
-                        pass
-                        break
-                    else:
-                        print(f"No weights were updated for {name}")
+                #for name, param in gcp.named_parameters():
+                #    if not torch.equal(initial_weights[name], param):
+                #        # print(f"Weights updated for: {name}")
+                #        pass
+                #        break
+                #    else:
+                #        print(f"No weights were updated for {name}")
+            print(f"\t Epoch: {i} Batch: {j} Loss: {l:.4f} Acc: {acc:.4f} AVG_label:{torch.Tensor(labels).mean()} Mean_pred: {pred.mean():.4f} Mean_rounded_preb: {(pred>0.5).float().mean():.4f}")
         t2 = time.perf_counter()
         print('Time: t2-t1={}'.format(t2-t1))
         plot_acc /= j if j > 0 else 1
@@ -256,7 +265,7 @@ if __name__ == '__main__':
                     test_acc += ((pred.detach().cpu() > 0.5) == torch.Tensor(labels)).sum()/float(cn.shape[1])
                 test_acc /= j if j > 0 else 1
             gcp.train(prev_train_flag_test)
-            lr_scheduler.step(np.mean(loss_agg))
+            #lr_scheduler.step(np.mean(loss_agg))
         else:
             test_acc = -1
         if best < test_acc or (i % EPOC_STEP) == 0 and not args.test:

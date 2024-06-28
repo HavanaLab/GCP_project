@@ -14,6 +14,7 @@ class GraphDataSet(Dataset):
         self.get_true = get_true
         self.jsons = glob.glob('{}/*.json'.format(self.gd))
         self.jsons = [g for g in self.jsons if filter(g)]
+        #print(self.jsons)
 
         limit = limit or len(self.jsons)
         self.jsons = self.jsons[:limit]
