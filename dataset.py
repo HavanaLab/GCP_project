@@ -160,6 +160,53 @@ def self_conrained_solve_csp(M, n_colors, gurobi_licnese=True):
             raise Exception("Gurobi is unsure about the problem")
 
 
+def self_contained_min_coloring(M):
+    N = len(M)  # Number of nodes
+    max_colors = N  # Maximum number of colors
+
+    with ExitStack() as stack:
+        env = stack.enter_context(gpy.Env(params=options)) if gurobi_licnese else None
+        model = stack.enter_context(gpy.Model(env=env)) if gurobi_licnese else gpy.Model("GCP")
+        model.setParam('OutputFlag', 0)
+
+        # Create variables
+        x = model.addVars(N, max_colors, vtype=gpy.GRB.BINARY)
+        y = model.addVar(vtype=gpy.GRB.INTEGER)
+
+        # Each node is assigned exactly one color
+        model.addConstrs((gpy.quicksum(x[i, j] for j in range(max_colors)) == 1 for i in range(N)))
+
+        # Adjacent nodes do not share the same color
+        for i in range(N):
+            for j in range(i + 1, N):
+                if M[i][j] == 1:  # If nodes i and j are adjacent
+                    for k in range(max_colors):
+                        model.addConstr(x[i, k] + x[j, k] <= 1)
+
+        # If a node is colored with color j, then y must be at least j
+        for i in range(N):
+            for j in range(max_colors):
+                model.addConstr(y >= j * x[i, j])
+
+        # Objective: minimize the highest color index used
+        model.setObjective(y, gpy.GRB.MINIMIZE)
+
+        model.optimize()
+
+        if model.status == gpy.GRB.OPTIMAL:
+            # Extract solution
+            solution = {}
+            for i in range(N):
+                for j in range(max_colors):
+                    if x[i, j].x > 0.5:
+                        solution[i] = j
+            return solution, y.x + 1
+        elif model.status == gpy.GRB.INFEASIBLE:
+            return None, None
+        else:
+            raise Exception("Gurobi is unsure about the problem")
+
+
 with ExitStack() as stack:
     env = stack.enter_context(gpy.Env(params=options)) if gurobi_licnese else None
 
