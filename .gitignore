@@ -5,4 +5,7 @@ data*/
 *.pstat
 client.properties
 ./utils/secrets.py
-./results/
+results/
+plots/
+lib/
+GMatch4py/
