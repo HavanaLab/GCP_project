@@ -61,6 +61,7 @@ class LayerNormLSTM(nn.LSTMCell):
 
         self.fc = nn.Linear(input_size + hidden_size, 4 * hidden_size, bias=False)
         self.activation = activation
+        # self.activation = lambda x: x
 
     def forward(self, input, states):
         seq_len, batch_size, _ = input.size()

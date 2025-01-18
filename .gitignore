@@ -4,3 +4,4 @@ checkpoints/
 data*/
 *.pstat
 client.properties
+./utils/secrets.py
